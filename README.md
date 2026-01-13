@@ -1,6 +1,6 @@
 # Premier League Odds Comparison
 
-A React application that compares Premier League betting odds from multiple bookmakers using The Odds API.
+A React application that compares Premier League betting odds from multiple bookmakers using Odds-API.io.
 
 ## Features
 
@@ -14,7 +14,7 @@ A React application that compares Premier League betting odds from multiple book
 ### Prerequisites
 
 - Node.js 18+
-- An API key from [The Odds API](https://the-odds-api.com/)
+- An API key from [Odds-API.io](https://odds-api.io/)
 
 ### Installation
 
@@ -50,7 +50,7 @@ npm run build
 
 ## API
 
-This application uses [The Odds API](https://the-odds-api.com/) to fetch Premier League odds. You'll need to sign up for a free API key to use the application.
+This application uses [Odds-API.io](https://odds-api.io/) to fetch Premier League odds. See the [API documentation](https://docs.odds-api.io/) for more details.
 
 ## License
 

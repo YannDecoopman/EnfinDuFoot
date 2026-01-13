@@ -30,14 +30,14 @@ function App() {
               Enter Your API Key
             </h2>
             <p className="text-gray-600 text-sm mb-4">
-              Get your free API key from{' '}
+              Get your API key from{' '}
               <a
-                href="https://the-odds-api.com/"
+                href="https://odds-api.io/"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-purple-600 hover:underline"
               >
-                The Odds API
+                Odds-API.io
               </a>
             </p>
             <form onSubmit={handleSubmit}>
@@ -84,7 +84,7 @@ function App() {
       {/* Footer */}
       <footer className="bg-gray-800 text-gray-400 py-4 mt-auto">
         <div className="container mx-auto px-4 text-center text-sm">
-          <p>Data provided by The Odds API</p>
+          <p>Data provided by Odds-API.io</p>
           <p className="mt-1">
             Bookmakers: Bet365, SingBet, Unibet
           </p>

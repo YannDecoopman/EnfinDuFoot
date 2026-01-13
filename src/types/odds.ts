@@ -1,36 +1,41 @@
-// Types for The Odds API response
-// API Documentation: https://the-odds-api.com/
+// Types for Odds-API.io response
+// API Documentation: https://docs.odds-api.io/
 
-export interface Bookmaker {
-  key: string;
-  title: string;
-  last_update: string;
-  markets: Market[];
-}
-
-export interface Market {
-  key: string;
-  last_update: string;
-  outcomes: Outcome[];
-}
-
-export interface Outcome {
-  name: string;
-  price: number;
-}
-
-export interface Match {
+// Event from /events endpoint
+export interface Event {
   id: string;
-  sport_key: string;
-  sport_title: string;
-  commence_time: string;
-  home_team: string;
-  away_team: string;
-  bookmakers: Bookmaker[];
+  sport: string;
+  league: string;
+  home: string;
+  away: string;
+  startTime: string;
+  status: string;
 }
 
-export interface OddsApiResponse {
-  matches: Match[];
+// Odds response structure
+export interface OddsOutcome {
+  name: string;
+  odds: number;
+  link?: string;
+}
+
+export interface OddsMarket {
+  type: string; // "ML" for moneyline (1X2)
+  outcomes: OddsOutcome[];
+}
+
+export interface BookmakerOddsResponse {
+  bookmaker: string;
+  markets: OddsMarket[];
+  updatedAt: string;
+}
+
+export interface OddsResponse {
+  eventId: string;
+  home: string;
+  away: string;
+  startTime: string;
+  bookmakers: BookmakerOddsResponse[];
 }
 
 // Processed odds for display
@@ -63,7 +68,7 @@ export interface MatchOdds {
 export const TARGET_BOOKMAKERS = {
   bet365: 'Bet365',
   singbet: 'SingBet',
-  unibet_eu: 'Unibet',
+  unibet: 'Unibet',
 } as const;
 
 export type BookmakerKey = keyof typeof TARGET_BOOKMAKERS;

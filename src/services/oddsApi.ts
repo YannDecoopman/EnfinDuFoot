@@ -1,5 +1,6 @@
 import type {
-  Match,
+  Event,
+  OddsResponse,
   MatchOdds,
   BookmakerOdds,
   ProcessedOdds,
@@ -7,27 +8,24 @@ import type {
 } from '../types/odds';
 import { TARGET_BOOKMAKERS } from '../types/odds';
 
-const API_BASE_URL = 'https://api.the-odds-api.com/v4';
-const SPORT_KEY = 'soccer_epl'; // English Premier League
+const API_BASE_URL = 'https://api.odds-api.io/v3';
+const PREMIER_LEAGUE_SLUG = 'premier-league';
 
 /**
- * Fetches upcoming Premier League matches with odds from The Odds API
+ * Fetches upcoming Premier League events from Odds-API.io
  */
-export async function fetchPremierLeagueOdds(apiKey: string): Promise<Match[]> {
-  const bookmakerKeys = Object.keys(TARGET_BOOKMAKERS).join(',');
-
-  const url = new URL(`${API_BASE_URL}/sports/${SPORT_KEY}/odds`);
+export async function fetchPremierLeagueEvents(apiKey: string): Promise<Event[]> {
+  const url = new URL(`${API_BASE_URL}/events`);
   url.searchParams.append('apiKey', apiKey);
-  url.searchParams.append('regions', 'eu,uk');
-  url.searchParams.append('markets', 'h2h'); // Head to head (1X2)
-  url.searchParams.append('bookmakers', bookmakerKeys);
-  url.searchParams.append('oddsFormat', 'decimal');
+  url.searchParams.append('sport', 'football');
+  url.searchParams.append('league', PREMIER_LEAGUE_SLUG);
+  url.searchParams.append('status', 'upcoming');
 
   const response = await fetch(url.toString());
 
   if (!response.ok) {
     if (response.status === 401) {
-      throw new Error('Invalid API key. Please check your Odds API key.');
+      throw new Error('Invalid API key. Please check your Odds-API.io key.');
     }
     if (response.status === 429) {
       throw new Error('API rate limit exceeded. Please try again later.');
@@ -35,34 +33,92 @@ export async function fetchPremierLeagueOdds(apiKey: string): Promise<Match[]> {
     throw new Error(`API request failed: ${response.status} ${response.statusText}`);
   }
 
-  const data: Match[] = await response.json();
+  const data: Event[] = await response.json();
   return data;
+}
+
+/**
+ * Fetches odds for multiple events using the /odds/multi endpoint
+ */
+export async function fetchOddsForEvents(
+  apiKey: string,
+  eventIds: string[]
+): Promise<OddsResponse[]> {
+  if (eventIds.length === 0) return [];
+
+  // API supports max 10 events per call
+  const batchSize = 10;
+  const results: OddsResponse[] = [];
+  const bookmakerKeys = Object.keys(TARGET_BOOKMAKERS).join(',');
+
+  for (let i = 0; i < eventIds.length; i += batchSize) {
+    const batch = eventIds.slice(i, i + batchSize);
+    const url = new URL(`${API_BASE_URL}/odds/multi`);
+    url.searchParams.append('apiKey', apiKey);
+    url.searchParams.append('eventIds', batch.join(','));
+    url.searchParams.append('bookmakers', bookmakerKeys);
+
+    const response = await fetch(url.toString());
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Invalid API key. Please check your Odds-API.io key.');
+      }
+      if (response.status === 429) {
+        throw new Error('API rate limit exceeded. Please try again later.');
+      }
+      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+    }
+
+    const data: OddsResponse[] = await response.json();
+    results.push(...data);
+  }
+
+  return results;
+}
+
+/**
+ * Fetches Premier League matches with odds
+ */
+export async function fetchPremierLeagueOdds(apiKey: string): Promise<OddsResponse[]> {
+  const events = await fetchPremierLeagueEvents(apiKey);
+  const eventIds = events.map((e) => e.id);
+  return fetchOddsForEvents(apiKey, eventIds);
 }
 
 /**
  * Extracts odds from a match's bookmaker data
  */
-function extractOdds(match: Match, bookmakerKey: string): ProcessedOdds {
-  const bookmaker = match.bookmakers.find((b) => b.key === bookmakerKey);
+function extractOdds(oddsResponse: OddsResponse, bookmakerKey: string): ProcessedOdds {
+  const bookmaker = oddsResponse.bookmakers.find(
+    (b) => b.bookmaker.toLowerCase() === bookmakerKey.toLowerCase()
+  );
 
   if (!bookmaker) {
     return { home: null, draw: null, away: null };
   }
 
-  const h2hMarket = bookmaker.markets.find((m) => m.key === 'h2h');
+  // Find ML (moneyline/1X2) market
+  const mlMarket = bookmaker.markets.find((m) => m.type === 'ML');
 
-  if (!h2hMarket) {
+  if (!mlMarket) {
     return { home: null, draw: null, away: null };
   }
 
-  const homeOutcome = h2hMarket.outcomes.find((o) => o.name === match.home_team);
-  const awayOutcome = h2hMarket.outcomes.find((o) => o.name === match.away_team);
-  const drawOutcome = h2hMarket.outcomes.find((o) => o.name === 'Draw');
+  const homeOutcome = mlMarket.outcomes.find(
+    (o) => o.name.toLowerCase() === oddsResponse.home.toLowerCase() || o.name === '1'
+  );
+  const awayOutcome = mlMarket.outcomes.find(
+    (o) => o.name.toLowerCase() === oddsResponse.away.toLowerCase() || o.name === '2'
+  );
+  const drawOutcome = mlMarket.outcomes.find(
+    (o) => o.name.toLowerCase() === 'draw' || o.name === 'X'
+  );
 
   return {
-    home: homeOutcome?.price ?? null,
-    draw: drawOutcome?.price ?? null,
-    away: awayOutcome?.price ?? null,
+    home: homeOutcome?.odds ?? null,
+    draw: drawOutcome?.odds ?? null,
+    away: awayOutcome?.odds ?? null,
   };
 }
 
@@ -94,21 +150,21 @@ function findBestOdds(bookmakerOdds: BookmakerOdds[]): MatchOdds['bestOdds'] {
 /**
  * Processes raw API data into a format suitable for display
  */
-export function processMatchOdds(matches: Match[]): MatchOdds[] {
-  return matches.map((match) => {
+export function processMatchOdds(oddsResponses: OddsResponse[]): MatchOdds[] {
+  return oddsResponses.map((oddsResponse) => {
     const bookmakerOdds: BookmakerOdds[] = (Object.keys(TARGET_BOOKMAKERS) as BookmakerKey[]).map(
       (key) => ({
         bookmaker: TARGET_BOOKMAKERS[key],
         bookmakerKey: key,
-        odds: extractOdds(match, key),
+        odds: extractOdds(oddsResponse, key),
       })
     );
 
     return {
-      id: match.id,
-      homeTeam: match.home_team,
-      awayTeam: match.away_team,
-      commenceTime: match.commence_time,
+      id: oddsResponse.eventId,
+      homeTeam: oddsResponse.home,
+      awayTeam: oddsResponse.away,
+      commenceTime: oddsResponse.startTime,
       bookmakerOdds,
       bestOdds: findBestOdds(bookmakerOdds),
     };
