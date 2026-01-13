@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { MatchOdds } from './types/odds';
 import { fetchPremierLeagueOdds, processMatchOdds } from './services/oddsApi';
 import { MatchSearch } from './components/MatchSearch';
 import { MatchOddsCard } from './components/MatchOddsCard';
 
 const ENV_API_KEY = import.meta.env.VITE_ODDS_API_KEY || '';
+const REFRESH_INTERVAL = 30000; // 30 secondes
 
 function App() {
   const [apiKey, setApiKey] = useState(ENV_API_KEY);
@@ -13,26 +14,56 @@ function App() {
   const [selectedMatch, setSelectedMatch] = useState<MatchOdds | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
+  const loadMatches = useCallback(async (isInitial = false) => {
+    if (!apiKey) return;
+
+    try {
+      if (isInitial) {
+        setLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
+      setError(null);
+
+      const rawMatches = await fetchPremierLeagueOdds(apiKey);
+      const processedMatches = processMatchOdds(rawMatches);
+      setMatches(processedMatches);
+      setLastUpdate(new Date());
+
+      // Mettre à jour le match sélectionné avec les nouvelles cotes
+      if (selectedMatch) {
+        const updatedMatch = processedMatches.find((m) => m.id === selectedMatch.id);
+        if (updatedMatch) {
+          setSelectedMatch(updatedMatch);
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur lors du chargement');
+    } finally {
+      setLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [apiKey, selectedMatch]);
+
+  // Chargement initial
   useEffect(() => {
     if (!isKeySubmitted || !apiKey) return;
-
-    async function loadMatches() {
-      try {
-        setLoading(true);
-        setError(null);
-        const rawMatches = await fetchPremierLeagueOdds(apiKey);
-        const processedMatches = processMatchOdds(rawMatches);
-        setMatches(processedMatches);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Erreur lors du chargement');
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadMatches();
+    loadMatches(true);
   }, [apiKey, isKeySubmitted]);
+
+  // Auto-refresh quand un match est sélectionné
+  useEffect(() => {
+    if (!selectedMatch || !isKeySubmitted) return;
+
+    const interval = setInterval(() => {
+      loadMatches(false);
+    }, REFRESH_INTERVAL);
+
+    return () => clearInterval(interval);
+  }, [selectedMatch, isKeySubmitted, loadMatches]);
 
   const handleKeySubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,6 +150,9 @@ function App() {
             <MatchOddsCard
               match={selectedMatch}
               onClose={() => setSelectedMatch(null)}
+              lastUpdate={lastUpdate}
+              isRefreshing={isRefreshing}
+              onRefresh={() => loadMatches(false)}
             />
           </div>
         )}
