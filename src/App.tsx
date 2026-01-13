@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { PremierLeagueOdds } from './components/PremierLeagueOdds';
 
+const ENV_API_KEY = import.meta.env.VITE_ODDS_API_KEY || '';
+
 function App() {
-  const [apiKey, setApiKey] = useState('');
-  const [submittedKey, setSubmittedKey] = useState('');
+  const [apiKey, setApiKey] = useState(ENV_API_KEY);
+  const [submittedKey, setSubmittedKey] = useState(ENV_API_KEY);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
